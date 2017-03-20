@@ -31,6 +31,18 @@ vectorAdd(const float *A, const float *B, float *C, int numElements)
     }
 }
 
+__host__ void vectorAdd_host(const float *A, const float *B, float *C, int numElements)
+{
+  int i;
+  for (i=0; i<numElements;i++)
+  {
+     C[i]=A[i]+B[i];
+  }
+
+
+}
+
+
 /**
  * Host main routine
  */
@@ -75,6 +87,14 @@ int main(int argc, char * argv[])
         h_B[i] = rand()/(float)RAND_MAX;
     }
 
+
+    cudaEventRecord( start,0);    //记录当前时间
+    vectorAdd_host(h_A,h_B,h_C,numElements);
+    cudaEventRecord( stop,0);    //记录当前时间
+    cudaEventSynchronize(start);    //Waits for an event to complete.
+    cudaEventSynchronize(stop);    //Waits for an event to complete.Record之前的任务
+    cudaEventElapsedTime(&time_elapsed,start,stop);    //计算时间差
+    printf("cpu serial computing time：%f(ms)\n",time_elapsed);
     // Allocate the device input vector A
     float *d_A = NULL;
     err = cudaMalloc((void **)&d_A, size);
@@ -107,7 +127,7 @@ int main(int argc, char * argv[])
 
     // Copy the host input vectors A and B in host memory to the device input vectors in
     // device memory
-    cudaEventRecord( start,0);    //记录当前时间
+ //   cudaEventRecord( start,0);    //记录当前时间
     printf("Copy input data from the host memory to the CUDA device\n");
     startTime = clock();  
     err = cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
@@ -128,9 +148,11 @@ int main(int argc, char * argv[])
 
     // Launch the Vector Add CUDA Kernel
     //int threadsPerBlock = 256;
+    cudaEventRecord( start,0);    //记录当前时间
     int threadsPerBlock = atoi(argv[2]);
     int blocksPerGrid =(numElements + threadsPerBlock - 1) / threadsPerBlock;
     printf("CUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid, threadsPerBlock);
+    //cudaEventRecord( start1,0);    //记录当前时间
     vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, d_B, d_C, numElements);
     err = cudaGetLastError();
 
@@ -151,9 +173,7 @@ int main(int argc, char * argv[])
     cudaEventSynchronize(stop);    //Waits for an event to complete.Record之前的任务
     cudaEventElapsedTime(&time_elapsed,start,stop);    //计算时间差
     printf("cuda event time：%f(ms)\n",time_elapsed);
-    //printf("end time = %fs\n",  endTime);  
-    //printf("use gpu comput finish!\n");  
-    //printf("gpu use total time = %fs\n", (endTime - startTime) );  
+
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to copy vector C from device to host (error code %s)!\n", cudaGetErrorString(err));
