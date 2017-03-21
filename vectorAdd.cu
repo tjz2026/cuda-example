@@ -13,7 +13,7 @@
 
 // For the CUDA runtime routines (prefixed with "cuda_")
 #include <cuda_runtime.h>
-
+# include <cublas_v2.h>
 /**
  * CUDA Kernel Device code
  *
@@ -127,9 +127,8 @@ int main(int argc, char * argv[])
 
     // Copy the host input vectors A and B in host memory to the device input vectors in
     // device memory
- //   cudaEventRecord( start,0);    //记录当前时间
+    cudaEventRecord( start,0);    //记录当前时间
     printf("Copy input data from the host memory to the CUDA device\n");
-    startTime = clock();  
     err = cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
 
     if (err != cudaSuccess)
@@ -148,7 +147,6 @@ int main(int argc, char * argv[])
 
     // Launch the Vector Add CUDA Kernel
     //int threadsPerBlock = 256;
-    cudaEventRecord( start,0);    //记录当前时间
     int threadsPerBlock = atoi(argv[2]);
     int blocksPerGrid =(numElements + threadsPerBlock - 1) / threadsPerBlock;
     printf("CUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid, threadsPerBlock);
@@ -172,7 +170,7 @@ int main(int argc, char * argv[])
     cudaEventSynchronize(start);    //Waits for an event to complete.
     cudaEventSynchronize(stop);    //Waits for an event to complete.Record之前的任务
     cudaEventElapsedTime(&time_elapsed,start,stop);    //计算时间差
-    printf("cuda event time：%f(ms)\n",time_elapsed);
+    printf("cuda vectoradd event time：%f(ms)\n",time_elapsed);
 
     if (err != cudaSuccess)
     {
@@ -191,6 +189,32 @@ int main(int argc, char * argv[])
     }
 
     printf("Test PASSED\n");
+
+// test cudablas lib
+    cublasHandle_t handle;
+    cublasCreate (&handle);
+    float alpha=1.0;
+    cudaEventRecord( start,0);    //记录当前时间
+    cublasSetVector(numElements,sizeof(float),h_A,1,d_A,1);
+    cublasSetVector(numElements,sizeof(float),h_B,1,d_B,1);
+    cublasSaxpy_v2(handle,numElements,&alpha,d_A,1,d_B,1);
+    cublasGetVector(numElements,sizeof(float),d_B,1,h_C,1);
+
+    cudaEventRecord( stop,0);    //记录当前时间
+    cudaEventSynchronize(start);    //Waits for an event to complete.
+    cudaEventSynchronize(stop);    //Waits for an event to complete.Record之前的任务
+    cudaEventElapsedTime(&time_elapsed,start,stop);    //计算时间差
+    printf("cuda blas event time：%f(ms)\n",time_elapsed);
+
+    // Verify that the result vector by cublas is correct
+    for (int i = 0; i < numElements; ++i)
+    {
+        if (fabs(h_A[i] + h_B[i] - h_C[i]) > 1e-5)
+        {
+            fprintf(stderr, "Result verification failed at element %d!\n", i);
+            exit(EXIT_FAILURE);
+        }
+    }
 
     // Free device global memory
     err = cudaFree(d_A);
